@@ -1,0 +1,65 @@
+- job:
+    name: jjb-check
+    description: Managed by Jenkins Job Builder in <your github jenkins repo url here>
+    parameters:
+      - string:
+          name: BRANCH
+          default: '**'
+          description: "Git commit or branch to build"
+    properties:
+      - github:
+          url: <your github jenkins repo url here>
+    scm:
+      - git:
+          branches:
+            - $BRANCH
+          url: <your github jenkins ssh copy/paste here>
+#          credentials-id: <ID of credential to use to connect, which is the last field(a 32-digit hexadecimal code) of the path of URL visible after you clicked the creden-tial under Jenkins Global credentials. (optional)>
+          wipe-workspace: true
+          skip-tag: true
+    triggers:
+      - github
+    wrappers:
+      - ansicolor
+    builders:
+      - groovy-set-branch
+      - shell: |
+          #!/bin/bash -x
+          sudo rsync -av --delete jjb/ /etc/jenkins_jobs/jjb/
+          sudo /usr/local/bin/jenkins-jobs --ignore-cache test -r -o /etc/jenkins_jobs/out /etc/jenkins_jobs/jjb
+    publishers:
+      - conditional-publisher:
+          - condition-kind: regexp
+            condition-expression: ^(origin\/)?master$
+            condition-searchtext: $GIT_BRANCH
+            on-evaluation-failure: dont-run
+            action:
+              - trigger:
+                  project: jjb-deploy
+                  threshold: SUCCESS
+      - github-notifier
+      - groovy-build-info
+
+- job:
+    name: jjb-deploy
+    description: Managed by Jenkins Job Builder in <your github jenkins repo url here>
+    properties:
+      - github:
+          url: <your github jenkins repo url here>
+    scm:
+      - git:
+          url: <your github jenkins ssh copy/paste here>
+#          credentials-id: <ID of credential to use to connect, which is the last field(a 32-digit hexadecimal code) of the path of URL visible after you clicked the creden-tial under Jenkins Global credentials. (optional)>
+          branches:
+            - '**/master'
+          wipe-workspace: true
+          skip-tag: true
+    wrappers:
+      - ansicolor
+    builders:
+      - shell: |
+          #!/bin/bash -x
+          sudo /usr/local/bin/jenkins-jobs --ignore-cache update --delete-old -r /etc/jenkins_jobs/jjb
+    publishers:
+      - github-notifier
+      - groovy-build-info

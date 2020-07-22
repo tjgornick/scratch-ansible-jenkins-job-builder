@@ -1,0 +1,29 @@
+---
+- job-template:
+    name: '{client_name}_deploy_{environment}'
+    description: |
+      DO NOT EDIT THIS JOB via web ui. This job is managed by Jenkins Job Builder.
+      If an edit is needed, please commit the change to the repo.
+      This job will pull code from github. It would be extended to build and push to an environment.
+    parameters:
+      - string:
+          name: BRANCH
+          default: 'master'
+          description: "Git commit or branch to build"
+    properties:
+      - github:
+          url: '{github_url}'
+    scm:
+      - git:
+          branches:
+            - $BRANCH
+#         credentials-id:
+          url: '{github_url}'
+          wipe-workspace: true
+          skip-tag: true
+          submodule:
+            recursive: true
+    builders:
+      - groovy-set-branch
+    publishers:
+      - groovy-build-info

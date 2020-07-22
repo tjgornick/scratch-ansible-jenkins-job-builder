@@ -1,0 +1,7 @@
+- defaults:
+    name: global
+    build-discarder:
+      days-t-keep: 30
+      num-to-keep: 5
+      artifact-days-to-keep: -1
+      artifact-num-to-keep: -1

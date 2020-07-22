@@ -1,0 +1,41 @@
+---
+# These 2 work together to print the branch/commit info on the build history
+#
+- builder:
+    name: groovy-set-branch
+    builders:
+      - system-groovy:
+          command: |
+            import hudson.model.*
+
+            def setBuildParameter(String key, String val) {
+                def npl = new ArrayList<StringParameterValue>()
+                npl.add(new StringParameterValue(key, val))
+                def newPa = null
+                def oldPa = build.getAction(ParametersAction.class)
+                if (oldPa != null) {
+                    build.actions.remove(oldPa)
+                    newPa = oldPa.createUpdated(npl)
+                } else {
+                    newPa = new ParametersAction(npl)
+                }
+                build.actions.add(newPa)
+            }
+
+            def branch = build.getEnvironment(listener)['GIT_BRANCH']
+            if ( branch == "detached" ) {
+              branch = build.getEnvironment(listener)['GIT_COMMIT']
+            }
+            println "Setting Branch to $branch"
+            setBuildParameter("BRANCH", branch)
+- publisher:
+    name: groovy-build-info
+    publishers:
+      - groovy-postbuild:
+          script: |
+            def git_branch = manager.build.buildVariables.get('BRANCH')
+            def git_commit = manager.envVars['GIT_COMMIT']
+            description = "${git_commit.take(10)} (${git_branch})"
+            manager.build.setDescription(description)
+            manager.listener.logger.println("Git Info: Branch ${git_branch}, Commit ${git_commit}")
+          on-failure: nothing

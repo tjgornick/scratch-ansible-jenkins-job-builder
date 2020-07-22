@@ -1,0 +1,77 @@
+---
+- hosts: jenkins
+  remote_user: root
+
+  pre_tasks:
+  - name: install ansible repo for latest version
+    apt_repository:
+      repo: ppa:ansible/ansible
+  - name: install apt in case of lean vps
+    apt:
+      name: aptitude
+      update_cache: yes
+  - name: install system updates
+    apt:
+      upgrade: safe
+      update_cache: yes
+  - name: install some pre-reqs
+    action: >
+      apt name={{ item }} state=present update_cache=yes
+    with_items:
+      - vim
+      - curl
+      - sudo
+      - ansible
+      - python-pip
+  roles:
+  - role: geerlingguy.java
+  - role: geerlingguy.jenkins
+    become: true
+    jenkins_http_port: 8080
+    jenkins_admin_username: admin
+    jenkins_admin_password: somethingelsenotadmintobechangedlater
+  - role: openstack.jenkins-job-builder
+    jenkins_job_builder_config_jenkins_user: admin
+    jenkins_job_builder_config_jenkins_password: somethingelsenotadmintobechangedlater
+    jenkins_job_builder_config_jenkins_url: http://localhost:8080
+    jenkins_job_builder_config_job_builder_recursive: True
+  post_tasks:
+  - name: install jenkins plugins
+    jenkins_plugin:
+      name: "{{ item }}"
+      url_username: admin
+      url_password: somethingelsenotadmintobechangedlater
+      url: http://localhost:8080
+    become: true
+    with_items:
+      - git-client
+      - git
+      - github
+      - github-oauth
+      - groovy
+      - groovy-postbuild
+      - parameterized-trigger
+      - simple-theme-plugin
+  - name: Copy jenkins groovy configuration to proper location
+    copy:
+      src: /etc/ansible/security_settings.groovy
+      dest: /var/lib/jenkins/init.groovy.d/security_settings.groovy
+  - name: Copy jjb folder to proper location
+    copy:
+      src: /etc/ansible/jjb
+      dest: /etc/jenkins_jobs/
+  - name: Restart Jenkins for plugins installation
+    service: name=jenkins state=restarted enabled=yes
+  - name: Wait for Jenkins to be available
+    uri:
+      url: http://localhost:8080
+      force_basic_auth: yes
+      user: admin
+      password: somethingelsenotadmintobechangedlater
+      status_code: 200
+    register: result
+    until: result.status == 200
+    retries: 60
+    delay: 1
+  - name: Update jenkins jobs
+    shell: jenkins-jobs update -r --delete-old /etc/jenkins_jobs/jjb/

@@ -1,0 +1,11 @@
+- project:
+    name: <insert project name here>
+    jobs:
+      - '{client_name}_deploy_{environment}':
+           client_name: <this is passed above and to the template>
+           github_url: <url of repo with code here>
+           environment: dev-int (example)
+      -  '{client_name}_deploy_{environment}':
+            client_name: <this is passed above and to the template>
+            github_url: <url of repo with code here>
+            environment: stage (example)

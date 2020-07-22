@@ -1,0 +1,61 @@
+# Steps I've used to configure jenkins for SSL on ubuntu
+# These steps were executed in what is now the ssl/ folder of the repo at /root/scratch-ansible-jenkins-job-builder/ssl/
+# There's probably a way to utilize letsencrypt.org for this, for free
+
+    # Generate certificate csr -- this is what we need for GoDaddy to generate SSL cert
+    openssl req -new > new.ssl.csr
+    # I can't remember if it matters than I used the same <somethingrandompw> here as later. Probably not.
+
+    # copy/paste the contents of the csr into the text area on GoDaddy
+    # save this csr file with the privkey.pem file that is created with it, forever
+    # the privkey.pem is the private key for the server (jenkins) keep it safe
+
+    # After receiving the SSL from GD, download it, unzip the files to the directory with your csr and privkey.pem
+    # I renamed the <randomhash>.crt to jenkins_ssl.crt (this is the actual SSL cert)
+    # I renamed gd_bundle-g2-g1.crt to bundle_ssl.crt (this is also the ca.crt you may see referenced in other docs)
+
+    # Commands below are what I've actually run
+
+    # Create intermediate pkcs12 file
+    openssl pkcs12 -export -out jenkins_keystore.p12 -passout 'pass:<somethingrandompw>' \
+    -inkey privkey.pem -in jenkins_ssl.crt -certfile bundle_ssl.crt -name <probablyjenkins.probablyyourdomain.com>
+
+    # Create Java Keystore file
+    keytool -importkeystore -srckeystore jenkins_keystore.p12 \
+    -srcstorepass '<somethingrandom>' -srcstoretype PKCS12 -srcalias <probablyjenkins.probablyyourdomain.com> \
+    -deststoretype JKS -destkeystore jenkins_keystore.jks -deststorepass '<somethingrandompw>' \
+    -destalias <probablyjenkins.probablyyourdomain.com>
+
+    # Move keystore file to Jenkins and assign Jenkins service account permissions for same
+    cd /var/lib/jenkins
+    mkdir .keystore
+    cp ~/jenkins_keystore.jks /var/lib/jenkins/.keystore/
+    chown -R jenkins.jenkins .keystore/
+    chmod 700 .keystore/
+    chmod 600 .keystore/jenkins_keystore.jks
+
+    # Edit /etc/default/jenkins and change this value
+    HTTP_PORT=-1
+
+    # Paste this in the file below the above line
+    # configure HTTPS
+    JENKINS_HTTPS_PORT="8443"
+    JENKINS_HTTPS_KEYSTORE="/var/lib/jenkins/keystore/jenkins_keystore.jks"
+    JENKINS_HTTPS_KEYSTORE_PASSWORD="<somethingrandompw>"
+
+    # Append the following to the end of the existing JENKINS_ARGS
+    --httpsPort=$JENKINS_HTTPS_PORT --httpsKeyStore=$JENKINS_HTTPS_KEYSTORE --httpsKeyStorePassword=$JENKINS_HTTPS_KEYSTORE_PASSWORD
+
+    # Tell set iptables rule to forward 443 traffic to 8443 (:8443 still works also)
+    iptables -A PREROUTING -t nat -p tcp --dport 443 -j REDIRECT --to-port 8443
+
+    # At this point I also installed iptables-persistent to save iptables rules and reload them at system start
+    apt-get install iptables-persistent
+
+    # Rules are saved at /etc/iptables/rules.v4 and /etc/iptables/rules.v6
+    # When rules are added, save again with iptables-save
+
+    # Restart Jenkins service
+    service jenkins restart
+
+    # If something goes wrong, logs are at /var/log/jenkins/jenkins.log
